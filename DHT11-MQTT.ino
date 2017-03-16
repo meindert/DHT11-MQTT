@@ -7,7 +7,7 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266mDNS.h>
 #include <WiFiUdp.h>
-#include <ArduinoOTA.h>
+
 //#include <SPI.h>
 
 #include <DHT.h>
@@ -18,7 +18,7 @@
 const char* ssid = "hoving";
 const char* password = "groningen";
 const char* mqtt_server = "m12.cloudmqtt.com";
-const char* clientID = "NodeMCUDevKit";
+const char* clientID = "Squirrel-1";
 const char* outTopic = "home/fridge/temp";
 const char* inTopic = "home/fridge/topic"; //- See more at: http://www.esp8266.com/viewtopic.php?f=29&t=8746#sthash.JgCr0pF5.dpuf
 WiFiClient espClient;
@@ -41,11 +41,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
   // Conver the incoming byte array to a string
   payload[length] = '\0'; // Null terminator used to terminate the char array
   String message = (char*)payload;
-  relayState=!relayState;
-  digitalWrite(relay_pin,relayState);
-  EEPROM.write(0, relayState);    // Write state to EEPROM
-  EEPROM.commit();
-  
+ 
   Serial.print("Message arrived on topic: [");
   Serial.print(topic);
   Serial.print("], ");
@@ -63,6 +59,21 @@ void callback(char* topic, byte* payload, unsigned int length) {
     Serial.println(humidity);
     dtostrf(humidity , 2, 2, msg);
     client.publish("home/fridge/humidity", msg);
+  }  else if (message == "on" || message == "off" || message=="toggle" ){
+    if (message == "off")
+     relayState=HIGH;
+    if (message == "on") 
+     relayState=LOW;
+    if (message="toggle")
+      relayState=!relayState;
+      
+    digitalWrite(relay_pin,relayState);
+    EEPROM.write(0, relayState);    // Write state to EEPROM
+    EEPROM.commit();
+    if (relayState)
+      client.publish("home/fridge/switch", "off");
+    else
+      client.publish("home/fridge/switch", "on");
   }
 
 }
@@ -106,8 +117,7 @@ void reconnect() {
       Serial.print("failed, rc=");
       Serial.print(client.state());
       Serial.println(" try again in 5 seconds");
-      // Wait 5 seconds before retrying
-      ArduinoOTA.handle();
+
       delay(5000);
     }
   }
@@ -132,34 +142,6 @@ void setup() {
     ESP.restart();
   }
 
-  // Port defaults to 8266
-  // ArduinoOTA.setPort(8266);
-
-  // Hostname defaults to esp8266-[ChipID]
-  // ArduinoOTA.setHostname("myesp8266");
-
-  // No authentication by default
-  // ArduinoOTA.setPassword((const char *)"123");
-
-  ArduinoOTA.onStart([]() {
-    Serial.println("Start");
-  });
-  ArduinoOTA.onEnd([]() {
-    Serial.println("\nEnd");
-  });
-  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
-  });
-  ArduinoOTA.onError([](ota_error_t error) {
-    Serial.printf("Error[%u]: ", error);
-    if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
-    else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
-    else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
-    else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
-    else if (error == OTA_END_ERROR) Serial.println("End Failed");
-  });
-  
-  ArduinoOTA.begin();
   Serial.println("Ready");
   Serial.print("IP address: "); Serial.println(WiFi.localIP());
 
@@ -172,7 +154,7 @@ void setup() {
 }
 
 void loop() {
-  ArduinoOTA.handle();
+
   if (!client.connected()) {
     reconnect();
   }
